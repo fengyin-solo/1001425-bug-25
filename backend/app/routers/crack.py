@@ -19,15 +19,32 @@ STATUSES = ["待安排", "处置中", "已完成", "已取消"]
 @router.get("", response_model=PageResult[dict])
 def list_entries(
     keyword: str | None = Query(default=None, description="按处置单号检索"),
+    section: str | None = Query(default=None, description="按所在路段检索"),
+    crack_type: str | None = Query(default=None, description="按裂缝类型检索"),
     status: str | None = Query(default=None, description="待安排、处置中、已完成、已取消"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
-    """按处置单号与状态过滤裂缝处置列表；没有数据时返回空页，不报错。"""
+    """按处置单号、所在路段、裂缝类型与状态过滤裂缝处置列表；没有数据时返回空页，不报错。"""
     if size > 200:
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
-    items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
+    items, total = service.list_entries(
+        keyword=keyword, section=section, crack_type=crack_type, status=status, page=page, size=size,
+    )
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/summary")
+def summary() -> dict[str, Any]:
+    """统计卡片：待安排件数、本月处置长度、取消单数，与列表同源。"""
+    return service.summary()
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出裂缝处置清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "crack", "total": total, "items": items}
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -56,10 +73,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出裂缝处置清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "crack", "total": total, "items": items}
